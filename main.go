@@ -3,15 +3,30 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+
+	"pos-api/database"
+	"pos-api/internal/config"
 	"pos-api/internal/http/handler"
-	"pos-api/internal/repository_memory"
+	"pos-api/internal/repository_postgres"
 	"pos-api/internal/service"
 )
 
 func main() {
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal("failed to load config: ", err)
+	}
+
+	db, err := database.InitDB(cfg.DatabaseURL)
+	if err != nil {
+		log.Fatal("failed to connect database: ", err)
+	}
+	defer db.Close()
+
 	// Product
-	productRepo := repository_memory.NewProductRepo()
+	productRepo := repository_postgres.NewProductRepo(db)
 	productService := service.NewProductService(productRepo)
 	productHandler := handler.NewProductHandler(productService)
 	http.HandleFunc("GET /api/products", productHandler.GetProducts)
@@ -21,7 +36,7 @@ func main() {
 	http.HandleFunc("DELETE /api/products/", productHandler.DeleteProduct)
 
 	// Category
-	categoryRepo := repository_memory.NewCategoryRepo()
+	categoryRepo := repository_postgres.NewCategoryRepo(db)
 	categoryService := service.NewCategoryService(categoryRepo)
 	categoryHandler := handler.NewCategoryHandler(categoryService)
 	http.HandleFunc("GET /api/categories", categoryHandler.GetCategories)
@@ -46,7 +61,7 @@ func main() {
 
 	fmt.Println("Starting server on :8081")
 
-	err := http.ListenAndServe(":8081", nil)
+	err = http.ListenAndServe(":8081", nil)
 	if err != nil {
 		fmt.Println("Failed to start server:", err)
 	}
